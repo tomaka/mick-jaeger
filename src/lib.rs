@@ -140,6 +140,21 @@
 //! let mut _span = traces_in.span(NonZeroU128::new(43).unwrap(), "something");
 //! _span.log().with_string("key", "value");
 //! ```
+//!
+//! # Differences with other crates
+//!
+//! While there exists other crates that let you interface with *Jaeger*, they are all
+//! overcomplicated according to the author of `mick_jaeger`. Some are lossy abstractions: by
+//! trying to be easy to use, they hide important details (such as the trace ID), which causes
+//! more confusion than it helps.
+//!
+//! `mick_jaeger` tries to be simple. The fact that it doesn't handle sending to the server
+//! removes a lot of opinionated decisions concerning networking libraries and threading.
+//!
+//! `mick_jaeger` could theoretically be `no_std`-compatible (after a few tweaks), but can't
+//! because at the time of writing there is no no-std-compatible library for the *thrift*
+//! protocol.
+//!
 
 use futures::{channel::mpsc, prelude::*, stream::FusedStream as _};
 use protocol::agent::TAgentSyncClient as _;
@@ -177,7 +192,9 @@ pub fn init(config: Config) -> (Arc<TracesIn>, TracesOut) {
         buffer,
         client,
     };
-    let traces_in = TracesIn { sender: Mutex::new(tx) };
+    let traces_in = TracesIn {
+        sender: Mutex::new(tx),
+    };
     (Arc::new(traces_in), traces_out)
 }
 
@@ -190,7 +207,11 @@ impl TracesIn {
     ///
     /// Must be passed a `trace_id` that is used to group spans together. Its meaning is
     /// arbitrary.
-    pub fn span(self: &Arc<Self>, trace_id: NonZeroU128, operation_name: impl Into<String>) -> Span {
+    pub fn span(
+        self: &Arc<Self>,
+        trace_id: NonZeroU128,
+        operation_name: impl Into<String>,
+    ) -> Span {
         Span {
             traces_in: self.clone(),
             trace_id: trace_id.get(),
