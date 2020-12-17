@@ -161,7 +161,7 @@ use protocol::agent::TAgentSyncClient as _;
 use std::{
     convert::TryFrom as _,
     mem,
-    num::NonZeroU128,
+    num::{NonZeroU128, NonZeroU64},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime},
 };
@@ -212,11 +212,59 @@ impl TracesIn {
         trace_id: NonZeroU128,
         operation_name: impl Into<String>,
     ) -> Span {
+        self.span_with_id_and_parent(
+            trace_id,
+            NonZeroU64::new(rand::random()).unwrap(),
+            None,
+            operation_name,
+        )
+    }
+
+    /// Builds a new [`Span`], using a specific span ID.
+    ///
+    /// Use this method when it is required to know the ID of a span, for example when building
+    /// links between spans across different services.
+    pub fn span_with_id(
+        self: &Arc<Self>,
+        trace_id: NonZeroU128,
+        span_id: NonZeroU64,
+        operation_name: impl Into<String>,
+    ) -> Span {
+        self.span_with_id_and_parent(trace_id, span_id, None, operation_name)
+    }
+
+    /// Builds a new [`Span`], whose parent uses a specific span ID.
+    ///
+    /// A `parent_id` equal to 0 means "no parent".
+    pub fn span_with_parent(
+        self: &Arc<Self>,
+        trace_id: NonZeroU128,
+        parent_id: Option<NonZeroU64>,
+        operation_name: impl Into<String>,
+    ) -> Span {
+        self.span_with_id_and_parent(
+            trace_id,
+            NonZeroU64::new(rand::random()).unwrap(),
+            parent_id,
+            operation_name,
+        )
+    }
+
+    /// Builds a new [`Span`], with a specific ID whose parent uses a specific span ID.
+    ///
+    /// A `parent_id` equal to 0 means "no parent".
+    pub fn span_with_id_and_parent(
+        self: &Arc<Self>,
+        trace_id: NonZeroU128,
+        span_id: NonZeroU64,
+        parent_id: Option<NonZeroU64>,
+        operation_name: impl Into<String>,
+    ) -> Span {
         Span {
             traces_in: self.clone(),
             trace_id: trace_id.get(),
-            span_id: rand::random(),
-            parent_span_id: 0,
+            span_id: span_id.get(),
+            parent_span_id: parent_id.map(|id| id.get()).unwrap_or(0),
             operation_name: operation_name.into(),
             start_time: SystemTime::now(),
             tags: base_tags(),
@@ -243,12 +291,16 @@ impl Span {
     /// > **Note**: There is no need to keep the parent [`Span`] alive while the children is
     /// >           alive. The protocol allows for parents that don't completely overlap their
     /// >           children.
-    // TODO: is this true? is this actually allowed?
     pub fn child(&self, operation_name: impl Into<String>) -> Span {
+        self.child_with_id(NonZeroU64::new(rand::random()).unwrap(), operation_name)
+    }
+
+    /// Creates a new [`Span`], child of this one, with a specific ID.
+    pub fn child_with_id(&self, span_id: NonZeroU64, operation_name: impl Into<String>) -> Span {
         Span {
             traces_in: self.traces_in.clone(),
             trace_id: self.trace_id,
-            span_id: rand::random(),
+            span_id: span_id.get(),
             parent_span_id: self.span_id,
             operation_name: operation_name.into(),
             start_time: SystemTime::now(),
