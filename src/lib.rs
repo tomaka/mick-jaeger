@@ -266,6 +266,7 @@ impl TracesIn {
             span_id: span_id.get(),
             parent_span_id: parent_id.map(|id| id.get()).unwrap_or(0),
             operation_name: operation_name.into(),
+            references: Vec::new(),
             start_time: SystemTime::now(),
             tags: base_tags(),
             logs: Vec::new(),
@@ -280,6 +281,7 @@ pub struct Span {
     /// [`Span::span_id`] of the parent, or `0` if no parent.
     parent_span_id: u64,
     operation_name: String,
+    references: Vec<protocol::jaeger::SpanRef>,
     start_time: SystemTime,
     tags: Vec<protocol::jaeger::Tag>,
     logs: Vec<protocol::jaeger::Log>,
@@ -303,6 +305,7 @@ impl Span {
             span_id: span_id.get(),
             parent_span_id: self.span_id,
             operation_name: operation_name.into(),
+            references: Vec::new(),
             start_time: SystemTime::now(),
             tags: base_tags(),
             logs: Vec::new(),
@@ -324,6 +327,20 @@ impl Span {
             timestamp,
             fields: Vec::new(),
         }
+    }
+
+    /// Adds a "followfrom" relation ship towards another span of (potentially) another trace.
+    pub fn add_follows_from(&mut self, trace_id: NonZeroU128, span_id: NonZeroU64) {
+        self.references.push(protocol::jaeger::SpanRef {
+            ref_type: protocol::jaeger::SpanRefType::FollowsFrom,
+            trace_id_low: i64::from_ne_bytes(
+                <[u8; 8]>::try_from(&trace_id.get().to_ne_bytes()[8..]).unwrap(),
+            ),
+            trace_id_high: i64::from_ne_bytes(
+                <[u8; 8]>::try_from(&trace_id.get().to_ne_bytes()[..8]).unwrap(),
+            ),
+            span_id: i64::from_ne_bytes(span_id.get().to_ne_bytes()),
+        });
     }
 
     /// Add a new key-value tag to this span.
@@ -359,8 +376,12 @@ impl Drop for Span {
                 ),
                 span_id: i64::from_ne_bytes(self.span_id.to_ne_bytes()),
                 parent_span_id: i64::from_ne_bytes(self.parent_span_id.to_ne_bytes()),
-                operation_name: mem::replace(&mut self.operation_name, String::new()),
-                references: None,
+                operation_name: mem::take(&mut self.operation_name),
+                references: if self.references.is_empty() {
+                    None
+                } else {
+                    Some(mem::take(&mut self.references))
+                },
                 flags: 0,
                 start_time: i64::try_from(
                     self.start_time
@@ -376,11 +397,11 @@ impl Drop for Span {
                         .as_micros(),
                 )
                 .unwrap_or(i64::max_value()),
-                tags: Some(mem::replace(&mut self.tags, Vec::new())),
+                tags: Some(mem::take(&mut self.tags)),
                 logs: if self.logs.is_empty() {
                     None
                 } else {
-                    Some(mem::replace(&mut self.logs, Vec::new()))
+                    Some(mem::take(&mut self.logs))
                 },
             });
     }
