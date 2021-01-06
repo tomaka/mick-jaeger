@@ -1,6 +1,6 @@
 [package]
 name = "mick-jaeger"
-version = "0.1.3"
+version = "0.1.4"
 license = "Apache-2.0"
 description = "Rust client for sending traces to a Jaeger server"
 repository = "https://github.com/tomaka/mick-jaeger"
