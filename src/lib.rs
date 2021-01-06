@@ -262,8 +262,8 @@ impl TracesIn {
     ) -> Span {
         Span {
             traces_in: self.clone(),
-            trace_id: trace_id.get(),
-            span_id: span_id.get(),
+            trace_id,
+            span_id,
             parent_span_id: parent_id.map(|id| id.get()).unwrap_or(0),
             operation_name: operation_name.into(),
             references: Vec::new(),
@@ -276,8 +276,8 @@ impl TracesIn {
 
 pub struct Span {
     traces_in: Arc<TracesIn>,
-    trace_id: u128,
-    span_id: u64,
+    trace_id: NonZeroU128,
+    span_id: NonZeroU64,
     /// [`Span::span_id`] of the parent, or `0` if no parent.
     parent_span_id: u64,
     operation_name: String,
@@ -302,14 +302,24 @@ impl Span {
         Span {
             traces_in: self.traces_in.clone(),
             trace_id: self.trace_id,
-            span_id: span_id.get(),
-            parent_span_id: self.span_id,
+            span_id,
+            parent_span_id: self.span_id.get(),
             operation_name: operation_name.into(),
             references: Vec::new(),
             start_time: SystemTime::now(),
             tags: base_tags(),
             logs: Vec::new(),
         }
+    }
+
+    /// Returns the trace ID originally passed when building this span.
+    pub fn trace_id(&self) -> NonZeroU128 {
+        self.trace_id
+    }
+
+    /// Returns the span ID originally passed when building this span.
+    pub fn span_id(&self) -> NonZeroU64 {
+        self.span_id
     }
 
     /// Add a log entry to this span.
@@ -330,7 +340,12 @@ impl Span {
     }
 
     /// Adds a "followfrom" relation ship towards another span of (potentially) another trace.
-    pub fn add_follows_from(&mut self, trace_id: NonZeroU128, span_id: NonZeroU64) {
+    pub fn add_follows_from(&mut self, other: &Span) {
+        self.add_follows_from_raw(other.trace_id(), other.span_id())
+    }
+
+    /// Adds a "followfrom" relation ship towards another span of (potentially) another trace.
+    pub fn add_follows_from_raw(&mut self, trace_id: NonZeroU128, span_id: NonZeroU64) {
         self.references.push(protocol::jaeger::SpanRef {
             ref_type: protocol::jaeger::SpanRefType::FollowsFrom,
             trace_id_low: i64::from_ne_bytes(
@@ -369,12 +384,12 @@ impl Drop for Span {
             .unwrap()
             .try_send(protocol::jaeger::Span {
                 trace_id_low: i64::from_ne_bytes(
-                    <[u8; 8]>::try_from(&self.trace_id.to_ne_bytes()[8..]).unwrap(),
+                    <[u8; 8]>::try_from(&self.trace_id.get().to_ne_bytes()[8..]).unwrap(),
                 ),
                 trace_id_high: i64::from_ne_bytes(
-                    <[u8; 8]>::try_from(&self.trace_id.to_ne_bytes()[..8]).unwrap(),
+                    <[u8; 8]>::try_from(&self.trace_id.get().to_ne_bytes()[..8]).unwrap(),
                 ),
-                span_id: i64::from_ne_bytes(self.span_id.to_ne_bytes()),
+                span_id: i64::from_ne_bytes(self.span_id.get().to_ne_bytes()),
                 parent_span_id: i64::from_ne_bytes(self.parent_span_id.to_ne_bytes()),
                 operation_name: mem::take(&mut self.operation_name),
                 references: if self.references.is_empty() {
