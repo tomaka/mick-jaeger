@@ -369,6 +369,16 @@ impl Span {
         // TODO: check for duplicates?
         self.tags.push(int_tag(key, value));
     }
+
+    /// Modifies the start time of this span.
+    ///
+    /// > **Note**: This method can be useful in order to generate a span with a `trace_id` that
+    /// >           is only know after the span should have started. To do so, call
+    /// >           [`StartTime::now`] when the span should start, create the span once you know
+    /// >           the ̀`trace_id`, then call this method.
+    pub fn override_start_time(&mut self, start_time: StartTime) {
+        self.start_time = start_time.0;
+    }
 }
 
 impl Drop for Span {
@@ -419,6 +429,14 @@ impl Drop for Span {
                     Some(mem::take(&mut self.logs))
                 },
             });
+    }
+}
+
+pub struct StartTime(SystemTime);
+
+impl StartTime {
+    pub fn now() -> Self {
+        StartTime(SystemTime::now())
     }
 }
 
