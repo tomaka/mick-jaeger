@@ -379,6 +379,17 @@ impl Span {
     pub fn override_start_time(&mut self, start_time: StartTime) {
         self.start_time = start_time.0;
     }
+
+    /// Modifies the start time of this span.
+    ///
+    /// > **Note**: This method can be useful in order to generate a span with a `trace_id` that
+    /// >           is only know after the span should have started. To do so, call
+    /// >           [`StartTime::now`] when the span should start, create the span once you know
+    /// >           the ̀`trace_id`, then call this method.
+    pub fn with_start_time_override(mut self, start_time: StartTime) -> Self {
+        self.override_start_time(start_time);
+        self
+    }
 }
 
 impl Drop for Span {
