@@ -348,11 +348,11 @@ impl Span {
     pub fn add_follows_from_raw(&mut self, trace_id: NonZeroU128, span_id: NonZeroU64) {
         self.references.push(protocol::jaeger::SpanRef {
             ref_type: protocol::jaeger::SpanRefType::FollowsFrom,
-            trace_id_low: i64::from_ne_bytes(
-                <[u8; 8]>::try_from(&trace_id.get().to_ne_bytes()[8..]).unwrap(),
+            trace_id_low: i64::from_be_bytes(
+                <[u8; 8]>::try_from(&trace_id.get().to_be_bytes()[8..]).unwrap(),
             ),
-            trace_id_high: i64::from_ne_bytes(
-                <[u8; 8]>::try_from(&trace_id.get().to_ne_bytes()[..8]).unwrap(),
+            trace_id_high: i64::from_be_bytes(
+                <[u8; 8]>::try_from(&trace_id.get().to_be_bytes()[..8]).unwrap(),
             ),
             span_id: i64::from_ne_bytes(span_id.get().to_ne_bytes()),
         });
@@ -404,11 +404,11 @@ impl Drop for Span {
             .lock()
             .unwrap()
             .try_send(protocol::jaeger::Span {
-                trace_id_low: i64::from_ne_bytes(
-                    <[u8; 8]>::try_from(&self.trace_id.get().to_ne_bytes()[8..]).unwrap(),
+                trace_id_low: i64::from_be_bytes(
+                    <[u8; 8]>::try_from(&self.trace_id.get().to_be_bytes()[8..]).unwrap(),
                 ),
-                trace_id_high: i64::from_ne_bytes(
-                    <[u8; 8]>::try_from(&self.trace_id.get().to_ne_bytes()[..8]).unwrap(),
+                trace_id_high: i64::from_be_bytes(
+                    <[u8; 8]>::try_from(&self.trace_id.get().to_be_bytes()[..8]).unwrap(),
                 ),
                 span_id: i64::from_ne_bytes(self.span_id.get().to_ne_bytes()),
                 parent_span_id: i64::from_ne_bytes(self.parent_span_id.to_ne_bytes()),
